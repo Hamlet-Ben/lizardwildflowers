@@ -1,0 +1,274 @@
+---
+title: "Lizard Wildflowers"
+author: "Ben Holt"
+date: "2026-04-14"
+output: html_document
+---
+# 🌼 Wildflower Recording and Distribution on the Lizard Peninsula  
+*An analysis of iNaturalist data using 1 km grid mapping*
+
+---
+
+## 📍 Introduction
+
+This project began with a simple question: **where are the best places to go to look for wildflowers on the Lizard Peninsula?**
+
+The [Lizard Peninsula](https://en.wikipedia.org/wiki/Lizard_Peninsula "Lizard Peninsula") is one of the most botanically rich parts of the UK, with a distinctive mix of coastal grassland, heathland and maritime habitats. Its mild climate and unusual geology support a wide range of flowering plants, making it an ideal place to explore patterns of plant diversity and distribution.
+
+Rather than relying only on guidebooks or local knowledge, this report uses records from [iNaturalist](https://www.inaturalist.org "iNaturalist") to explore how flowering plants have actually been recorded across the region. By mapping record density, species richness and the distribution of selected taxa, the analysis aims to provide a practical, data-informed picture of where wildflowers are most likely to be found.
+
+The report begins with a broad overview of all recorded angiosperms (flowering plants) in the study area, before narrowing its focus to wildflowers. This allows the analysis to show both the overall structure of the dataset and the more specific patterns that are most relevant to people wanting to discover wildflowers on the Lizard.
+
+---
+
+## 🎯 Aims and Objectives
+
+This analysis follows a two-stage approach:
+
+1. To explore patterns in **all recorded angiosperms (flowering plants)**  
+2. To then focus more specifically on **wildflowers (herbaceous flowering plants)**  
+
+The key objectives are:
+
+- To map **record density** across the study area  
+- To map **species richness** at a 1 km grid scale  
+- To summarise **record counts across major taxonomic groups**  
+- To identify patterns in recording effort and biodiversity  
+- To explore the distribution of selected wildflower species  
+
+---
+
+## 📊 Data Source
+
+All data used in this report are sourced from the [iNaturalist](https://www.inaturalist.org "iNaturalist") API.
+
+The dataset includes:
+- Observations of angiosperms (flowering plants)  
+- Records within a defined bounding box covering the Lizard Peninsula
+- Records meeting “research grade” quality standards  
+
+These filters ensure that the dataset represents a reliable and spatially consistent sample of plant observations.
+
+---
+
+```{r data_load}
+source("Incremental update helpers.R")
+source("lizard helper functions.R")
+
+# Load your existing saved dataset
+load("obs_sf.RData")
+
+# Update it
+obs_sf <- update_inat_dataset(
+  existing_obs_sf = obs_sf,
+  taxon_id = 47125,
+  swlat = 49.95,
+  swlng = -5.32,
+  nelat = 50.10,
+  nelng = -5.00,
+  max_pages = 100,
+  verbose = TRUE
+)
+
+# Save the refreshed version
+save(obs_sf, file = "obs_sf.RData")
+
+#load GIS shapefile
+grid_lizard <- readRDS("GIS Data/grid_lizard.rds")
+
+```
+
+### Analytical Approach
+
+The analysis is structured in two stages:
+
+#### Stage 1: Angiosperm overview  
+All flowering plant records are analysed to understand:
+- overall recording patterns  
+- spatial distribution of effort  
+- broad taxonomic representation  
+
+#### Stage 2: Wildflower focus  
+A subset of the data is then used to focus on herbaceous flowering plants (“wildflowers”), allowing more ecologically meaningful interpretation.
+
+---
+
+## 🌿 Angiosperm Overview
+
+This section provides a broad overview of all flowering plant records in the study area.
+
+### Dataset Summary
+
+Summary statistics include:
+- Total number of observations  
+- Total number of species recorded  
+- Number of contributing observers  
+- Temporal range of records  
+
+```{r summary-stats, echo=FALSE, message=FALSE}
+library(dplyr)
+library(lubridate)
+library(knitr)
+
+# Ensure date column is in Date format
+obs_sf <- obs_sf %>%
+  mutate(
+    observed_on = as.Date(observed_on)
+  )
+
+# Calculate summary statistics
+summary_stats <- list(
+  total_records = nrow(obs_sf),
+  total_species = n_distinct(obs_sf$taxon.id),
+  total_observers = n_distinct(obs_sf$user.login),
+  first_record = min(obs_sf$observed_on, na.rm = TRUE),
+  last_record = max(obs_sf$observed_on, na.rm = TRUE)
+)
+
+# Create a neat table
+summary_table <- data.frame(
+  Metric = c(
+    "Total observations",
+    "Total species recorded",
+    "Number of observers",
+    "Earliest record",
+    "Most recent record"
+  ),
+  Value = c(
+    format(summary_stats$total_records, big.mark = ","),
+    summary_stats$total_species,
+    summary_stats$total_observers,
+    as.character(summary_stats$first_record),
+    as.character(summary_stats$last_record)
+  )
+)
+
+kable(summary_table, align = c("l", "r"), col.names = rep("", ncol(summary_table)))
+```
+---
+
+### Taxonomic Composition
+
+This section summarises record counts across major plant groups (e.g. families or higher taxa).
+
+The aim is to identify:
+- which groups are most frequently recorded  
+- potential biases in recording effort  
+- under-represented plant groups  
+
+---
+
+## 🗺️ Spatial Patterns
+
+### Record Density
+
+Record density is mapped at a 1 km grid scale, showing the number of observations per grid cell.
+
+These patterns are influenced by:
+- accessibility  
+- observer behaviour  
+- landscape features  
+
+---
+
+### Species Richness
+
+Species richness (number of species per grid cell) is mapped to identify areas of high recorded diversity.
+
+These maps highlight:
+- potential biodiversity hotspots  
+- areas of concentrated recording effort  
+
+---
+
+### Effort and Bias
+
+Differences between record density and species richness are explored to understand how recording effort influences observed patterns.
+
+This helps distinguish between:
+- genuinely diverse areas  
+- heavily recorded locations  
+
+---
+
+## 🌼 Wildflower Focus
+
+Following the broad angiosperm analysis, this section focuses on wildflowers.
+
+### Defining Wildflowers
+
+“Wildflower” is not a formal taxonomic category. For the purposes of this report, the term refers to herbaceous flowering plants, approximated through taxonomic filtering.
+
+This definition is used to:
+- focus on ecologically meaningful species  
+- improve interpretability of spatial patterns  
+
+---
+
+### Wildflower Diversity
+
+This section summarises:
+- number of wildflower species recorded  
+- most frequently observed species  
+- distribution across the study area  
+
+---
+
+### Distribution of Selected Species
+
+Selected wildflower species are mapped individually to illustrate:
+
+- habitat associations  
+- spatial clustering  
+- recording patterns  
+
+These examples help connect the dataset to real-world ecological features of the Lizard Peninsula.
+
+---
+
+## ⚠️ Limitations
+
+Several limitations should be considered:
+
+- iNaturalist data are presence-only and influenced by observer behaviour  
+- recording effort is uneven across the study area  
+- some plant groups (e.g. grasses and sedges) are under-recorded  
+- “wildflower” classification is approximate  
+
+These factors mean that results reflect both biodiversity and recording patterns.
+
+---
+
+## 🔍 Interpretation
+
+The analysis highlights the interaction between:
+- ecological diversity  
+- landscape accessibility  
+- citizen science recording behaviour  
+
+By comparing record density, species richness, and taxonomic composition, it is possible to identify both well-recorded areas and potential gaps.
+
+---
+
+## 🚀 Opportunities for Future Work
+
+This analysis provides a foundation for further work, including:
+
+- refining wildflower classification  
+- incorporating plant trait data  
+- analysing seasonal trends  
+- comparing with other regions  
+- supporting targeted survey and engagement activities  
+
+---
+
+## 📣 Conclusion
+
+This study demonstrates how citizen science data can be used to explore plant diversity at a local scale.
+
+By starting with a broad angiosperm dataset and then focusing on wildflowers, it is possible to produce both robust analysis and meaningful ecological insights.
+
+These findings can support:
+- biodiversity understanding  
+- improved recording strategies  
+- public engagement with wildflowers  
