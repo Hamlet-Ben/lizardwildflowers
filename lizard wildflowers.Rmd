@@ -115,7 +115,12 @@ if (length(missing_taxa) > 0) {
   
   # Save updated lookup
   save(all_taxa_inat_info, file = "all_taxa_inat_info.RData")
+  
+  
 }
+#high taxo info to inat records
+  obs_sf <- add_higher_taxo(obs_sf, all_taxa_inat_info)
+
 
 ```
 
@@ -183,7 +188,7 @@ kable(summary_table, align = c("l", "r"), col.names = rep("", ncol(summary_table
 ```
 
 #### Record density
-```{r leaflet-recording-density, echo=FALSE, message=FALSE, warning=FALSE}
+
 ```{r leaflet-recording-density, echo=FALSE, message=FALSE, warning=FALSE}
 library(sf)
 library(dplyr)
@@ -281,6 +286,155 @@ The aim is to identify:
 - which groups are most frequently recorded  
 - potential biases in recording effort  
 - under-represented plant groups  
+
+```{r sexy-order-barchart-final, echo=FALSE, message=FALSE, warning=FALSE, fig.width=12, fig.height=10}
+library(dplyr)
+library(ggplot2)
+library(scales)
+library(forcats)
+library(stringr)
+
+#--------------------------------------------------
+# 1. Summarise records by order
+#--------------------------------------------------
+order_summary <- obs_sf %>%
+  filter(!is.na(order_common)) %>%
+  count(order_common, sort = TRUE, name = "records") %>%
+  mutate(order_common = tools::toTitleCase(order_common))
+
+#--------------------------------------------------
+# 2. Top 10 + Other
+#--------------------------------------------------
+top_n <- 10
+
+order_plot <- bind_rows(
+  order_summary %>% slice_head(n = top_n),
+  tibble(
+    order_common = "Other Orders",
+    records = sum(order_summary$records[-seq_len(min(top_n, nrow(order_summary)))])
+  )
+) %>%
+  filter(records > 0)
+
+#--------------------------------------------------
+# 3. Short labels
+#--------------------------------------------------
+shorten_order <- function(x) {
+  x %>%
+    str_replace(", And Allies$", "") %>%
+    str_replace("Sunflowers, Bellflowers, Fanflowers", "Sunflowers, Bellflowers") %>%
+    str_replace("Mints, Plantains, Olives", "Mints, Plantains") %>%
+    str_replace("Agaves, Orchids, Irises", "Agaves, Orchids") %>%
+    str_replace("Heathers, Balsams, Primroses", "Heathers, Primroses") %>%
+    str_replace("Roses, Elms, Figs", "Roses, Elms") %>%
+    str_replace("Honeysuckles, Moschatels", "Honeysuckles") %>%
+    str_replace("Saxifrages, Stonecrops", "Saxifrages") %>%
+    str_wrap(width = 24)
+}
+
+order_plot <- order_plot %>%
+  mutate(
+    label = shorten_order(order_common),
+    label = fct_reorder(label, records)
+  )
+
+#--------------------------------------------------
+# 4. Plot
+#--------------------------------------------------
+ggplot(order_plot, aes(x = label, y = records, fill = records)) +
+  
+  geom_col(
+    width = 0.62,   # slimmer bars = more air
+    alpha = 0.92
+  ) +
+  
+  geom_text(
+    aes(label = comma(records)),
+    hjust = -0.15,
+    size = 4.2,
+    fontface = "bold"
+  ) +
+  
+  coord_flip(clip = "off") +
+  
+  scale_fill_viridis_c(
+    option = "magma",
+    direction = -1,
+    guide = "none"
+  ) +
+  
+  scale_y_continuous(
+    labels = comma,
+    expand = expansion(mult = c(0, 0.16))
+  ) +
+  
+  labs(
+    title = "Taxonomic Composition",
+    subtitle = "Distribution of iNaturalist observations across major plant orders",
+    x = NULL,
+    y = "Number of records",
+    caption = "Top 10 orders shown individually; remaining orders grouped as Other"
+  ) +
+  
+  theme_minimal(base_size = 13) +
+  
+  theme(
+    plot.title = element_text(
+      face = "bold",
+      size = 28,
+      hjust = 0,
+      margin = margin(b = 5)
+    ),
+    
+    plot.subtitle = element_text(
+      size = 14,
+      colour = "grey35",
+      hjust = 0,
+      margin = margin(b = 18)
+    ),
+    
+    axis.text.y = element_text(
+      size = 11,
+      face = "bold",
+      lineheight = 0.95
+    ),
+    
+    axis.text.x = element_text(
+      size = 10.5,
+      colour = "grey35"
+    ),
+    
+    axis.title.x = element_text(
+      size = 13,
+      face = "bold",
+      margin = margin(t = 12)
+    ),
+    
+    panel.grid.major.y = element_blank(),
+    panel.grid.minor = element_blank(),
+    panel.grid.major.x = element_line(colour = "grey88"),
+    
+    plot.caption = element_text(
+      size = 10,
+      colour = "grey45",
+      hjust = 0
+    ),
+    
+    plot.margin = margin(10, 40, 10, 10)
+  )
+```
+
+### Interpretation of Taxonomic Composition
+
+The taxonomic breakdown suggests that the Lizard Peninsula supports a diverse and characteristically coastal flora. The most frequently recorded plant orders include Caryophyllales (“Pinks, Cactuses, and Allies”), Asterales (“Sunflowers, Bellflowers, and Allies”), and Lamiales (“Mints, Plantains, and Allies”). These groups contain many species associated with maritime grassland, heathland, flower-rich verges, rocky ground, and open semi-natural habitats.
+
+The prominence of Caryophyllales is particularly notable, as this order includes species such as thrift, sea campion, common sorrel, knotgrass, and stonecrops. Many of these plants are well adapted to thin soils, exposed coastal conditions, and rocky habitats, which may reflect the distinctive botanical character of the Lizard’s cliffs, heaths, and serpentine landscapes.
+
+High totals for Asterales are also expected. This group includes familiar flowers such as daisies, dandelions, ragworts, knapweeds, thistles, chamomile, and bellflowers. Many are widespread, colourful, and flower for long periods, making them especially likely to be recorded by observers.
+
+Lamiales includes species such as ribwort plantain, speedwells, foxglove, selfheal, eyebrights, dead-nettles, and mints. These plants are commonly associated with grassland, heaths, hedgebanks, and field margins.
+
+Overall, the results indicate that iNaturalist records are capturing genuine ecological patterns rather than being dominated by only a small number of widespread garden or urban species. However, some recorder bias is still likely. Colourful and easily recognised flowers are often over-recorded, while grasses, sedges, rushes, and more difficult plant groups are likely to be under-represented.
 
 ---
 
