@@ -143,3 +143,48 @@ bng_to_gridref <- function(easting, northing, digits = 4) {
     digits/2, n_remainder
   )
 }
+
+# ============================================================
+# FUNCTION: get_taxa_info
+# PURPOSE: Download information about a taxonomic group from iNat using it's iNat code
+# ============================================================
+
+
+get_taxa_info <- function(taxa){
+  
+  require(jsonlite)
+  require(httr)
+  require(plyr)
+  
+  chunks <- split(taxa, ceiling(seq_along(taxa) / 30))
+  
+  all_output <- list()
+  
+  count = 1
+  
+  for (chunk in chunks) {
+    
+    print(count)
+    
+    base_url <- "https://api.inaturalist.org/v1/taxa/"
+    
+    base_url <- paste0(base_url, paste0(chunk, collapse = ","))
+    
+    res <- GET(url = base_url) #get data from iNaturalist
+    
+    content_json <- fromJSON(content(res, as = "text", encoding = "UTF-8"), flatten = TRUE)
+    
+    output <- content_json$results[,c("id", "name", "rank", "preferred_common_name", "ancestry", "default_photo.url", "default_photo.attribution", "default_photo.license_code")]
+    
+    all_output[[count]] <- output
+    
+    count = count + 1
+    
+    
+  }
+  
+  all_output <- do.call("rbind", all_output)
+  
+  all_output
+  
+}

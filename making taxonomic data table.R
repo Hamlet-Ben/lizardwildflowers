@@ -68,3 +68,5 @@ obs_sf <- obs_sf %>%
 
 table(obs_sf$class_common)
 table(obs_sf$order_common)
+
+save(all_taxa_inat_info, file = "all_taxa_inat_info.RData")

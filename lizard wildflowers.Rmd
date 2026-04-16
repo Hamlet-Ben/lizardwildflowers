@@ -78,6 +78,48 @@ grid_lizard <- readRDS("GIS Data/grid_lizard.rds")
 
 ```
 
+```{r update-taxonomy, echo=FALSE, message=FALSE}
+
+## Update taxonomy for any new taxa
+library(dplyr)
+
+# Load existing taxa info if it exists
+if (file.exists("all_taxa_inat_info.RData")) {
+  load("all_taxa_inat_info.RData")
+} else {
+  all_taxa_inat_info <- data.frame()
+}
+
+# Extract all ancestry IDs from updated dataset
+all_taxa_current <- unique(unlist(strsplit(na.omit(obs_sf$taxon.ancestry), "/")))
+
+# Convert to numeric
+all_taxa_current <- as.numeric(all_taxa_current)
+
+# Existing taxa IDs
+existing_ids <- if (nrow(all_taxa_inat_info) > 0) all_taxa_inat_info$id else numeric(0)
+
+# Find missing taxa
+missing_taxa <- setdiff(all_taxa_current, existing_ids)
+
+cat(length(missing_taxa), "new taxa IDs to fetch\n")
+
+# Fetch only missing taxa
+if (length(missing_taxa) > 0) {
+  
+  new_taxa_info <- get_taxa_info(missing_taxa)
+  
+  # Combine with existing
+  all_taxa_inat_info <- bind_rows(all_taxa_inat_info, new_taxa_info) %>%
+    distinct(id, .keep_all = TRUE)
+  
+  # Save updated lookup
+  save(all_taxa_inat_info, file = "all_taxa_inat_info.RData")
+}
+
+```
+
+
 ### Analytical Approach
 
 The analysis is structured in two stages:
@@ -98,12 +140,6 @@ A subset of the data is then used to focus on herbaceous flowering plants (“wi
 This section provides a broad overview of all flowering plant records in the study area.
 
 ### Dataset Summary
-
-Summary statistics include:
-- Total number of observations  
-- Total number of species recorded  
-- Number of contributing observers  
-- Temporal range of records  
 
 ```{r summary-stats, echo=FALSE, message=FALSE}
 library(dplyr)
@@ -145,6 +181,96 @@ summary_table <- data.frame(
 
 kable(summary_table, align = c("l", "r"), col.names = rep("", ncol(summary_table)))
 ```
+
+#### Record density
+```{r leaflet-recording-density, echo=FALSE, message=FALSE, warning=FALSE}
+```{r leaflet-recording-density, echo=FALSE, message=FALSE, warning=FALSE}
+library(sf)
+library(dplyr)
+library(leaflet)
+library(htmltools)
+
+#--------------------------------------------------
+# 1. Ensure both layers use same CRS
+#--------------------------------------------------
+obs_sf_ll <- st_transform(obs_sf, 4326)
+grid_ll   <- st_transform(grid_lizard, 4326)
+
+#--------------------------------------------------
+# 2. Join records to grid cells
+#--------------------------------------------------
+obs_joined <- st_join(obs_sf_ll, grid_ll, join = st_within)
+
+#--------------------------------------------------
+# 3. Summarise recording density per grid cell
+#--------------------------------------------------
+grid_density <- obs_joined %>%
+  st_drop_geometry() %>%
+  count(tile_name, name = "records_n")
+
+#--------------------------------------------------
+# 4. Join counts back to grid
+#--------------------------------------------------
+grid_map <- grid_ll %>%
+  left_join(grid_density, by = "tile_name") %>%
+  mutate(
+    records_n = ifelse(is.na(records_n), 0, records_n)
+  )
+
+#--------------------------------------------------
+# 5. Colour palette
+#--------------------------------------------------
+pal <- colorNumeric(
+  palette = "YlOrRd",
+  domain = grid_map$records_n[grid_map$records_n > 0],
+  na.color = "transparent"
+)
+
+#--------------------------------------------------
+# 6. Leaflet map
+#--------------------------------------------------
+leaflet(grid_map) %>%
+  
+  addProviderTiles(
+    providers$CartoDB.Positron
+  ) %>%
+  
+  addPolygons(
+    fillColor = ~ifelse(records_n == 0, "transparent", pal(records_n)),
+    fillOpacity = ~ifelse(records_n == 0, 0, 0.35),
+    color = ~ifelse(records_n == 0, "transparent", "#666666"),
+    weight = ~ifelse(records_n == 0, 0, 0.8),
+    smoothFactor = 0.2,
+    popup = ~ifelse(
+      records_n == 0,
+      NA,
+      paste0(
+        "<b>Grid cell:</b> ", tile_name, "<br>",
+        "<b>Records:</b> ", format(records_n, big.mark = ",")
+      )
+    ),
+    label = ~ifelse(
+      records_n == 0,
+      NA,
+      paste0(tile_name, ": ", records_n, " records")
+    ),
+    highlightOptions = highlightOptions(
+      weight = 2,
+      color = "black",
+      fillOpacity = 0.55,
+      bringToFront = TRUE
+    )
+  ) %>%
+  
+  addLegend(
+    pal = pal,
+    values = ~records_n[records_n > 0],
+    opacity = 0.7,
+    title = "Recording density",
+    position = "bottomright"
+  )
+```
+
 ---
 
 ### Taxonomic Composition
